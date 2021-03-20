@@ -1,0 +1,344 @@
+import javax.swing.*;
+import java.awt.event.*;
+import java.util.*;
+
+public class Lab1 extends JFrame implements ActionListener {
+	private JTextField assemblerInstruction;
+	private JTextField binaryInstruction;
+	private JTextField hexInstruction;
+	private JLabel errorLabel;
+	
+	public Lab1() {
+		setTitle("PDP-11");
+		setBounds(100, 100, 400, 300);
+		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		getContentPane().setLayout(null);
+
+		assemblerInstruction = new JTextField();
+		assemblerInstruction.setBounds(25, 24, 134, 28);
+		getContentPane().add(assemblerInstruction);
+		assemblerInstruction.setColumns(10);
+
+		JLabel lblAssemblyLanguage = new JLabel("Assembly Language");
+		lblAssemblyLanguage.setBounds(25, 64, 160, 16);
+		getContentPane().add(lblAssemblyLanguage);
+
+		binaryInstruction = new JTextField();
+		binaryInstruction.setBounds(25, 115, 180, 28);
+		getContentPane().add(binaryInstruction);
+		binaryInstruction.setColumns(10);
+
+		hexInstruction = new JTextField();
+		hexInstruction.setBounds(236, 115, 134, 28);
+		getContentPane().add(hexInstruction);
+		hexInstruction.setColumns(10);
+
+		JLabel lblBinary = new JLabel("Binary Instruction");
+		lblBinary.setBounds(25, 155, 190, 16);
+		getContentPane().add(lblBinary);
+
+		JLabel lblHexEquivalent = new JLabel("Hex Instruction");
+		lblHexEquivalent.setBounds(236, 155, 131, 16);
+		getContentPane().add(lblHexEquivalent);
+
+		errorLabel = new JLabel("");
+		errorLabel.setBounds(25, 235, 280, 16);
+		getContentPane().add(errorLabel);
+
+		JButton btnEncode = new JButton("Encode");
+		btnEncode.setBounds(230, 25, 117, 29);
+		getContentPane().add(btnEncode);
+		btnEncode.addActionListener(this);
+
+		JButton btnDecode = new JButton("Decode Binary");
+		btnDecode.setBounds(30, 183, 170, 29);
+		getContentPane().add(btnDecode);
+		btnDecode.addActionListener(this);
+
+		JButton btnDecodeHex = new JButton("Decode Hex");
+		btnDecodeHex.setBounds(230, 183, 150, 29);
+		getContentPane().add(btnDecodeHex);
+		btnDecodeHex.addActionListener(this);
+	}
+
+	public void actionPerformed(ActionEvent evt) {
+		errorLabel.setText("");
+		if (evt.getActionCommand().equals("Encode")) {
+			encode();
+		} else if (evt.getActionCommand().equals("Decode Binary")) {
+			decodeBin();
+		} else if (evt.getActionCommand().equals("Decode Hex")) {
+			decodeHex();
+		}
+	}
+
+	public static void main(String[] args) {
+		Lab1 window = new Lab1();
+		window.setVisible(true);
+	}
+
+	String shortToHex(short x) {
+		String ans="";
+		for (int i=0; i<4; i++) {
+			int hex = x & 15;
+			char hexChar = "0123456789ABCDEF".charAt(hex);
+			ans = hexChar + ans;
+			x = (short)(x >> 4);
+		}
+		return ans;
+	}
+
+	String shortToBinary(short x) {
+		String ans="";
+		for(int i=0; i<16; i++) {
+			ans = (x & 1) + ans;
+			x = (short)(x >> 1);
+		}
+		return ans;
+	}
+	
+	/* pseudo encode:
+	 - take the assembly language input
+	 - break the input into 3 parts: operation, source, destination
+	 - process operation:
+	   +> if else statements, compare with values for each operation, take the value if equals
+	   +> if nothing equals, settext error, return
+	 - process source:
+	   +> compare string with proper mode for register, if proper => get the mode and regnumber
+	   +> add it to the value found for operation
+	 - destination:
+	   +> do the same for source
+	   +> add it to the parameter with both operation and source added before
+	 */
+	void encode() {
+		this.errorLabel.setText("");
+		this.binaryInstruction.setText("");
+		this.hexInstruction.setText("");
+		
+		String inputAssembly = assemblerInstruction.getText();
+		StringTokenizer inputAssemblyBreaker = new StringTokenizer(inputAssembly);
+		if (inputAssemblyBreaker.countTokens() != 2) {
+			this.errorLabel.setText("Illegal assembly instruction input");
+			return;
+		}
+		
+		String operation = inputAssemblyBreaker.nextToken();
+		operation = operation.toUpperCase();
+		int binOp = 0;
+		if (operation.equals("ADD")) {
+			binOp = 24576; //decimal of 0110000000000000 
+		}
+		else if (operation.equals("SUB")) {
+			binOp = 57344; //decimal of 1110000000000000
+			
+		}
+		else if (operation.equals("MOV")) {
+			binOp = 16384; //decimal of 0100000000000000
+			
+		}
+		else if (operation.equals("MOVB")) {
+			binOp = 49152; //decimal 0f 1100000000000000
+			
+		}
+		else if (operation.equals("CMP")) {
+			binOp = 0; //decimal of 0000000000000000
+		}
+		else if (operation.equals("CMPB")) {
+			binOp = 32768;
+			
+		}
+		else {
+			this.errorLabel.setText("Illegal operation input");
+			return;
+		}
+				
+		String reg = inputAssemblyBreaker.nextToken();
+		StringTokenizer regBreaker = new StringTokenizer(reg, ",");
+		
+		if (regBreaker.countTokens() != 2) {
+			this.errorLabel.setText("Illegal assembly instruction input");
+			return;
+		}
+		
+		String source = regBreaker.nextToken(); 
+		binOp = binOp + (encodeModeAndRegister(source) << 6);
+		String destination = regBreaker.nextToken();
+		binOp = binOp + (encodeModeAndRegister(destination));
+		
+		if (this.errorLabel.getText().equals("")) {
+			this.binaryInstruction.setText(this.shortToBinary((short)binOp));
+			this.hexInstruction.setText(this.shortToHex((short)binOp));
+		}
+		
+	}
+	
+	int encodeModeAndRegister(String register) {	
+		int regMode = 0;
+		char regNumber = '0';
+		
+		//case of Rn
+		if(register.length() == 2) {
+			if(register.charAt(0) != 'R') {
+				this.errorLabel.setText("Illegal register input");
+				return 0;
+			}
+			else {
+			regMode = 0; //decimal for 
+			regNumber = register.charAt(1);
+			}
+		}
+		//case of (Rn)
+		else if(register.length() == 4) {
+			if(register.charAt(0) != '(' | register.charAt(3) != ')' | register.charAt(1) != 'R') {
+				this.errorLabel.setText("Illegal register input");
+				return 0;
+			}
+			else {
+				regMode = 8;
+				regNumber = register.charAt(2);
+			}
+		}
+		//case of -(Rn) and (Rn)+
+		else if(register.length() == 5) {
+			//-(Rn)
+			if(register.charAt(0) == '-') {
+				if(register.charAt(1) != '(' | register.charAt(4) != ')' | register.charAt(2) != 'R') {
+					this.errorLabel.setText("Illegal register input");
+					return 0;
+				}
+				else {
+					regMode = 32;
+					regNumber = register.charAt(3);
+				}
+				
+			}
+			//(Rn)+
+			else if(register.charAt(4) == '+') {
+				if(register.charAt(0) != '(' | register.charAt(3) != ')' | register.charAt(1) != 'R') {
+					this.errorLabel.setText("Illegal register input");
+					return 0;
+				}
+				else {
+					regMode = 16;
+					regNumber = register.charAt(2);
+				}
+			}
+		}
+		else {
+			this.errorLabel.setText("Illegal register input");
+			return 0;
+		}
+		//there are only 3 bits for register number => wont exceed 111 or 7
+		if(regNumber < '0' | regNumber > '7') {
+			this.errorLabel.setText("Illegal register input");
+			return 0;
+		}
+		return regMode + Integer.parseInt(String.valueOf(regNumber));
+	}
+	
+	String decodeModeAndRegister(short Register) {
+		
+		String registerFull = "";
+		registerFull = Integer.toString((Register & 7)); //7 is 111 - mask 
+		short registerMode = (short)((Register >> 3) & 7);
+		if (registerMode == 0) { //decimal for 000 Rn
+			registerFull = "R" + registerFull;
+		}
+		else if (registerMode == 1) { //decimal for 001 (Rn)
+			registerFull = "(R" + registerFull + ")";
+			
+		}
+		else if (registerMode == 2) { //decimal for 010 (Rn)+
+			registerFull = "(R" + registerFull + ")+";
+			
+		}
+		else if (registerMode == 4) { //decimal for 100 -(Rn)
+			registerFull = "-(R" + registerFull + ")";
+		}
+		else {
+			this.errorLabel.setText("REGISTER INPUT ERROR");
+		}
+		return registerFull;
+		
+	}
+	
+	void decode (short machineLanguage) {
+		String assemblyOutput = "";
+		short operationBits = (short)((machineLanguage >> 12) & 15); //15 decimal for 0b1111
+		short sourceBits = (short)((machineLanguage >> 6) & 63); //63 decimal for 0b111111
+		short destinationBits = (short)(machineLanguage & 63); //63 decimal for 0b111111
+
+		if (operationBits == 6) { //decimal for 0110
+			assemblyOutput = "ADD";
+		}
+		else if (operationBits == 14) { //decimal for 1110
+			assemblyOutput = "SUB";
+		}
+		else if (operationBits == 4) { //decimal for 0100
+			assemblyOutput = "MOV";
+		}
+		else if (operationBits == 12) { //decimal for 1100
+			assemblyOutput = "MOVB";
+		}
+		else if (operationBits == 0) { //decimal for 0
+			assemblyOutput = "CMP";
+		}
+		else if (operationBits == 8) { //decimal for 1000
+			assemblyOutput = "CMPB";
+		}
+		else {
+			this.errorLabel.setText("INSTRUCTION INPUT ERROR");
+			return;
+		}
+		assemblyOutput = assemblyOutput + " " + decodeModeAndRegister(sourceBits);
+		assemblyOutput = assemblyOutput + "," + decodeModeAndRegister(destinationBits);
+		
+		if (this.errorLabel.getText().equals("")) {
+			this.assemblerInstruction.setText(assemblyOutput);
+		}
+	
+	}
+
+	void decodeBin() {
+		this.assemblerInstruction.setText("");
+		this.errorLabel.setText("");
+		this.hexInstruction.setText("");
+		
+		String inputBinary = this.binaryInstruction.getText();
+		if(inputBinary.length() != 16) {
+			this.errorLabel.setText("Binary input must be 16 bits");
+		}
+		short bin = 0;
+		try {
+			bin = (short) Integer.parseInt(inputBinary, 2);
+		}
+		catch (Exception e) {
+			this.errorLabel.setText("Input Binary Error");
+		}
+		decode(bin);
+		this.hexInstruction.setText(this.shortToHex(bin));
+	}
+	
+	void decodeHex() {
+		this.assemblerInstruction.setText("");
+		this.errorLabel.setText("");
+		this.binaryInstruction.setText("");
+		
+		String inputHex = this.hexInstruction.getText();
+		if(inputHex.length() != 4) {
+			this.errorLabel.setText("Hex input must have 4 digits");
+		}
+		short bin = 0;
+		try {
+			 bin = (short) Integer.parseInt(inputHex, 16);
+		}
+		catch (Exception e) {
+			this.errorLabel.setText("Input Hex Error");
+		}
+		decode(bin);
+		this.binaryInstruction.setText(this.shortToBinary((bin)));
+	}
+	
+	
+}
+
